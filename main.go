@@ -1,19 +1,40 @@
 package main
 
 import (
-	"fmt"
+	"crypto/tls"
 	"log"
 	"net/http"
-	"rsc.io/letsencrypt"
+
+	"golang.org/x/crypto/acme/autocert"
 )
 
+//AutocertConfig ...
+type AutocertConfig struct {
+	Debug       bool
+	HTTPPort    int
+	HTTPSPort   int
+	ProxyURL    string
+	RenewBefore int
+}
+
 func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello, TLS!\n")
-	})
-	var m letsencrypt.Manager
-	if err := m.CacheFile("letsencrypt.cache"); err != nil {
-		log.Fatal(err)
+
+	m := &autocert.Manager{
+		Prompt:      autocert.AcceptTOS,
+		Cache:       autocert.DirCache("secret-dir"),
+		HostPolicy:  autocert.HostWhitelist("golang.romualdo.com.br"),
+		RenewBefore: 30,
+		Client:      nil,
+		Email:       "",
+		ForceRSA:    false,
 	}
-	log.Fatal(m.Serve())
+
+	go http.ListenAndServe(":http", m.HTTPHandler(nil))
+
+	s := &http.Server{
+		Addr:      ":https",
+		TLSConfig: &tls.Config{GetCertificate: m.GetCertificate},
+	}
+	log.Fatal(s.ListenAndServeTLS("", ""))
+
 }
